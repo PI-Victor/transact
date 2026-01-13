@@ -22,3 +22,7 @@ Run with build optimizations:
 cargo build --release
 ./target/release/transact transactions.csv > accounts.csv
 ```
+
+
+## Errors
+This application does not utilize panic or unwrap and gracefully handles errors. Since the shouldn't be any additional output than that of the resolved account transactions it doesn't display the errors. In production it should use warn! and error! macros accordingly to stdout/stderr.
