@@ -1,0 +1,10 @@
+[package]
+name = "transact"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+csv = "1.4.0"
+serde = {version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.49.0", features = ["fs", "rt-multi-thread", "macros", "io-std"] }
+tokio-stream = "0.1.18"
