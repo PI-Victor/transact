@@ -1,5 +1,5 @@
 /target
 docs
-transaction.csv
+transactions.csv
 accounts.csv
 .venv

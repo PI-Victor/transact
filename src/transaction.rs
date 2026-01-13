@@ -62,3 +62,37 @@ impl FromStr for Kind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_amount_handles_whitespace_and_precision() {
+        assert_eq!(super::parse_amount("1.2345").unwrap(), 12_345);
+        assert_eq!(super::parse_amount("  0.0001 ").unwrap(), 1);
+        assert_eq!(super::parse_amount("2").unwrap(), 20_000);
+    }
+
+    #[test]
+    fn format_amount_round_trips_values() {
+        let samples = [0, 1, 12_345, -12_345, 200_000];
+        for &value in &samples {
+            let formatted = format_amount(value);
+            let reparsed = super::parse_amount(&formatted).unwrap();
+            assert_eq!(value, reparsed);
+        }
+    }
+
+    #[test]
+    fn transaction_deserializes_from_csv_row() {
+        let csv = "type,client,tx,amount\nwithdrawal,42,7,1.5000\n";
+        let mut rdr = csv::Reader::from_reader(csv.as_bytes());
+        let mut iter = rdr.deserialize::<Transaction>();
+        let tx = iter.next().unwrap().unwrap();
+        matches!(tx.kind, Kind::Withdrawal);
+        assert_eq!(tx.client, 42);
+        assert_eq!(tx.tx, 7);
+        assert_eq!(tx.amount, Some(15_000));
+    }
+}
