@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 csv = "1.4.0"
 serde = {version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.49.0", features = ["fs", "rt-multi-thread", "macros", "io-std"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
 tokio-stream = "0.1.18"

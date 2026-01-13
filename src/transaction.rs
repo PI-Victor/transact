@@ -3,11 +3,19 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 pub type Amount = i64;
-const SCALE: i64 = 10_000;
+pub const SCALE: i64 = 10_000;
 
 fn parse_amount(raw: &str) -> CrateResult<Amount> {
     let decimal = raw.trim().parse::<f64>()?;
     Ok((decimal * SCALE as f64).round() as i64)
+}
+
+pub fn format_amount(value: Amount) -> String {
+    let sign = if value < 0 { "-" } else { "" };
+    let abs = value.abs();
+    let whole = abs / SCALE;
+    let frac = abs % SCALE;
+    format!("{sign}{whole}.{frac:04}")
 }
 
 fn amount_from_str<'de, D>(deserializer: D) -> Result<Option<Amount>, D::Error>
