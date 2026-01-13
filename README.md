@@ -22,4 +22,3 @@ Run with build optimizations:
 cargo build --release
 ./target/release/transact transactions.csv > accounts.csv
 ```
-```
