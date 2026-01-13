@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
         let mut engine = Engine::new();
         let _ = ready_tx.send(());
         while let Some(tx) = rx.recv().await {
-            engine.process(tx)?;
+            engine.process(tx);
         }
 
         Ok(engine)

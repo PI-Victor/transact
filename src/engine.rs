@@ -1,4 +1,3 @@
-use crate::Result;
 use crate::transaction::Amount;
 use crate::transaction::{Kind, Transaction};
 use std::collections::HashMap;
@@ -49,11 +48,11 @@ impl Engine {
         self.accounts.iter()
     }
 
-    pub fn process(&mut self, record: Transaction) -> Result<()> {
+    pub fn process(&mut self, record: Transaction) {
         match record.kind {
             Kind::Deposit => {
                 let Some(amount) = record.amount else {
-                    return Ok(());
+                    return;
                 };
 
                 let acc = self
@@ -62,7 +61,7 @@ impl Engine {
                     .or_insert_with(Account::default);
 
                 if acc.locked {
-                    return Ok(());
+                    return;
                 }
                 acc.available += amount;
                 self.deposits.insert(
@@ -76,37 +75,37 @@ impl Engine {
             }
             Kind::Withdrawal => {
                 let Some(amount) = record.amount else {
-                    return Ok(());
+                    return;
                 };
 
                 let Some(acc) = self.accounts.get_mut(&record.client) else {
-                    return Ok(());
+                    return;
                 };
 
                 if acc.locked || acc.available < amount {
-                    return Ok(());
+                    return;
                 }
 
                 acc.available -= amount;
             }
             Kind::Dispute => {
                 let Some(deposit) = self.deposits.get_mut(&record.tx) else {
-                    return Ok(());
+                    return;
                 };
 
                 if deposit.status != DepositStatus::Posted {
-                    return Ok(());
+                    return;
                 }
 
                 let client = deposit.client;
                 let amount = deposit.amount;
 
                 let Some(account) = self.accounts.get_mut(&client) else {
-                    return Ok(());
+                    return;
                 };
 
                 if account.locked {
-                    return Ok(());
+                    return;
                 }
 
                 account.available -= amount;
@@ -115,15 +114,15 @@ impl Engine {
             }
             Kind::ChargeBack => {
                 let Some(deposit) = self.deposits.get_mut(&record.tx) else {
-                    return Ok(());
+                    return;
                 };
 
                 if deposit.status != DepositStatus::Disputed {
-                    return Ok(());
+                    return;
                 }
 
                 let Some(acc) = self.accounts.get_mut(&deposit.client) else {
-                    return Ok(());
+                    return;
                 };
 
                 acc.held -= deposit.amount;
@@ -132,15 +131,15 @@ impl Engine {
             }
             Kind::Resolve => {
                 let Some(deposit) = self.deposits.get_mut(&record.tx) else {
-                    return Ok(());
+                    return;
                 };
 
                 if deposit.status != DepositStatus::Disputed {
-                    return Ok(());
+                    return;
                 }
 
                 let Some(acc) = self.accounts.get_mut(&deposit.client) else {
-                    return Ok(());
+                    return;
                 };
 
                 acc.held -= deposit.amount;
@@ -148,8 +147,6 @@ impl Engine {
                 self.deposits.remove(&record.tx);
             }
         }
-
-        Ok(())
     }
 }
 
@@ -170,23 +167,17 @@ mod tests {
     #[test]
     fn deposit_and_withdrawal_follow_rules() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Deposit, 1, 10, Some(5 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Deposit, 1, 10, Some(5 * SCALE)));
         let acc = engine.accounts.get(&1).unwrap();
         assert_eq!(acc.available, 5 * SCALE);
 
         // Successful withdrawal
-        engine
-            .process(tx(Kind::Withdrawal, 1, 11, Some(2 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Withdrawal, 1, 11, Some(2 * SCALE)));
         let acc = engine.accounts.get(&1).unwrap();
         assert_eq!(acc.available, 3 * SCALE);
 
         // Withdrawal ignored when insufficient funds
-        engine
-            .process(tx(Kind::Withdrawal, 1, 12, Some(5 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Withdrawal, 1, 12, Some(5 * SCALE)));
         let acc = engine.accounts.get(&1).unwrap();
         assert_eq!(
             acc.available,
@@ -198,16 +189,14 @@ mod tests {
     #[test]
     fn dispute_and_resolve_move_funds_between_available_and_held() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Deposit, 2, 20, Some(8 * SCALE)))
-            .unwrap();
-        engine.process(tx(Kind::Dispute, 2, 20, None)).unwrap();
+        engine.process(tx(Kind::Deposit, 2, 20, Some(8 * SCALE)));
+        engine.process(tx(Kind::Dispute, 2, 20, None));
 
         let acc = engine.accounts.get(&2).unwrap();
         assert_eq!(acc.available, 0);
         assert_eq!(acc.held, 8 * SCALE);
 
-        engine.process(tx(Kind::Resolve, 2, 20, None)).unwrap();
+        engine.process(tx(Kind::Resolve, 2, 20, None));
         let acc = engine.accounts.get(&2).unwrap();
         assert_eq!(acc.available, 8 * SCALE);
         assert_eq!(acc.held, 0);
@@ -216,11 +205,9 @@ mod tests {
     #[test]
     fn chargeback_locks_account_and_removes_funds() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Deposit, 3, 30, Some(6 * SCALE)))
-            .unwrap();
-        engine.process(tx(Kind::Dispute, 3, 30, None)).unwrap();
-        engine.process(tx(Kind::ChargeBack, 3, 30, None)).unwrap();
+        engine.process(tx(Kind::Deposit, 3, 30, Some(6 * SCALE)));
+        engine.process(tx(Kind::Dispute, 3, 30, None));
+        engine.process(tx(Kind::ChargeBack, 3, 30, None));
 
         let acc = engine.accounts.get(&3).unwrap();
         assert_eq!(acc.available, 0);
@@ -228,9 +215,7 @@ mod tests {
         assert!(acc.locked, "chargeback must lock the account");
 
         // Further deposits are ignored
-        engine
-            .process(tx(Kind::Deposit, 3, 31, Some(2 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Deposit, 3, 31, Some(2 * SCALE)));
         let acc = engine.accounts.get(&3).unwrap();
         assert_eq!(acc.available, 0);
     }
@@ -238,16 +223,12 @@ mod tests {
     #[test]
     fn dispute_after_funds_spent_exposes_negative_available_balance() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Deposit, 4, 40, Some(4 * SCALE)))
-            .unwrap();
-        engine
-            .process(tx(Kind::Withdrawal, 4, 41, Some(4 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Deposit, 4, 40, Some(4 * SCALE)));
+        engine.process(tx(Kind::Withdrawal, 4, 41, Some(4 * SCALE)));
 
         // Disputing the spent deposit moves funds from available (now zero) into held,
         // so available becomes negative. The test captures that behavior explicitly.
-        engine.process(tx(Kind::Dispute, 4, 40, None)).unwrap();
+        engine.process(tx(Kind::Dispute, 4, 40, None));
         let acc = engine.accounts.get(&4).unwrap();
         assert!(
             acc.available < 0,
@@ -259,16 +240,12 @@ mod tests {
     #[test]
     fn deposit_into_locked_account_is_ignored() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Deposit, 5, 50, Some(2 * SCALE)))
-            .unwrap();
-        engine.process(tx(Kind::Dispute, 5, 50, None)).unwrap();
-        engine.process(tx(Kind::ChargeBack, 5, 50, None)).unwrap();
+        engine.process(tx(Kind::Deposit, 5, 50, Some(2 * SCALE)));
+        engine.process(tx(Kind::Dispute, 5, 50, None));
+        engine.process(tx(Kind::ChargeBack, 5, 50, None));
         assert!(engine.accounts.get(&5).unwrap().locked);
 
-        engine
-            .process(tx(Kind::Deposit, 5, 51, Some(3 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Deposit, 5, 51, Some(3 * SCALE)));
         let acc = engine.accounts.get(&5).unwrap();
         assert_eq!(acc.available, 0, "locked account must not accept deposits");
         assert!(
@@ -280,26 +257,26 @@ mod tests {
     #[test]
     fn withdrawals_and_disputes_without_matching_state_are_ignored() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Withdrawal, 99, 60, Some(SCALE)))
-            .unwrap();
-        assert!(engine.accounts.get(&99).is_none(), "new account must not be created");
+        engine.process(tx(Kind::Withdrawal, 99, 60, Some(SCALE)));
+        assert!(
+            engine.accounts.get(&99).is_none(),
+            "new account must not be created"
+        );
 
-        engine.process(tx(Kind::Dispute, 1, 9999, None)).unwrap();
-        assert!(engine.deposits.is_empty(), "unknown dispute must be ignored");
+        engine.process(tx(Kind::Dispute, 1, 9999, None));
+        assert!(
+            engine.deposits.is_empty(),
+            "unknown dispute must be ignored"
+        );
     }
 
     #[test]
     fn resolve_and_chargeback_require_disputed_status() {
         let mut engine = Engine::new();
-        engine
-            .process(tx(Kind::Deposit, 6, 70, Some(3 * SCALE)))
-            .unwrap();
+        engine.process(tx(Kind::Deposit, 6, 70, Some(3 * SCALE)));
 
-        engine.process(tx(Kind::Resolve, 6, 70, None)).unwrap();
-        engine
-            .process(tx(Kind::ChargeBack, 6, 70, None))
-            .unwrap();
+        engine.process(tx(Kind::Resolve, 6, 70, None));
+        engine.process(tx(Kind::ChargeBack, 6, 70, None));
 
         let acc = engine.accounts.get(&6).unwrap();
         assert_eq!(acc.available, 3 * SCALE);
